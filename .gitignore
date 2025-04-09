@@ -34,3 +34,6 @@
 # Build folders
 build_*/
 cmake_build_*/
+
+# Vim files
+.*.sw?
