@@ -8,7 +8,10 @@ set(CXX_EXTENSIONS NO)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-add_executable(doubles main_doubles.cpp)
+add_executable(doubles-with-templates with-templates/main_doubles.cpp)
 
-add_executable(ints main_ints.cpp)
+add_executable(ints-with-templates with-templates/main_ints.cpp)
 
+add_executable(doubles-no-templates no-templates/main_doubles.cpp)
+
+add_executable(ints-no-templates no-templates/main_ints.cpp)
