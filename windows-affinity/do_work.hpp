@@ -19,6 +19,43 @@ raise_thread_priority()
 		throw std::runtime_error{ "SetThreadPriority failed" };
 }
 
+#if 1
+void
+pin_to_core(
+	unsigned core_index)
+{
+	const DWORD_PTR thread_affinity_mask = 0 /* (DWORD_PTR{1} << core_index)*/;
+	
+	// Привязываем себя к конкретному ядру.
+	if( auto old_mask = SetThreadAffinityMask( GetCurrentThread(),
+			thread_affinity_mask );
+			0 == old_mask )
+	{
+		throw std::runtime_error{ "SetThreadAffinityMask failed" };
+	}
+}
+#else
+void
+pin_to_core(
+	unsigned core_index)
+{
+	GROUP_AFFINITY affinity;
+	SecureZeroMemory( &affinity, sizeof(affinity) );
+
+	affinity.Mask = (KAFFINITY{1} << core_index);
+	affinity.Group = 0;
+
+	std::cout << "core_index: " << core_index
+			<< ", affinity.Mask: " << std::hex << affinity.Mask
+			<< std::dec << std::endl;
+
+	if( !SetThreadGroupAffinity( GetCurrentThread(),
+			&affinity,
+			nullptr /* no old affinity */) )
+		throw std::runtime_error{ "SetThreadGroupAffinity failed" };
+}
+#endif
+
 template< typename T >
 void
 exec_demo_script_thread_body(
@@ -29,17 +66,6 @@ exec_demo_script_thread_body(
 {
 	try
 	{
-		// Привязываем себя к конкретному ядру.
-		if( auto old_mask = SetThreadAffinityMask( GetCurrentThread(),
-				thread_affinity_mask );
-				0 == old_mask )
-		{
-			throw std::runtime_error{ "SetThreadAffinityMask failed" };
-		}
-
-		// Повышаем свой приоритет.
-		raise_thread_priority();
-
 		start_latch.arrive_and_wait();
 
 		const auto started_at = std::chrono::steady_clock::now();
@@ -57,8 +83,12 @@ exec_demo_script_thread_body(
 
 class processor_index_enumerator_t
 {
+	static constexpr unsigned _max_current_index =
+			sizeof(DWORD_PTR) * 8 /* number of bits in a byte */;
+
 	const DWORD_PTR _processors_mask;
-	DWORD_PTR _current_index{ 0 };
+	unsigned _current_index{ _max_current_index };
+	unsigned _bit_index_to_check{ 0 };
 
 public:
 	processor_index_enumerator_t(
@@ -69,29 +99,23 @@ public:
 	void
 	try_find_index()
 	{
-		if( !_current_index )
-			_current_index = 1;
-		else
-			_current_index += 1;
-
-		bool found = false;
-		while( !found && (_current_index != 0) )
+		while( _bit_index_to_check < _max_current_index )
 		{
-			found = 0 != (_processors_mask & _current_index);
-			if( !found )
-				// По текущему индексу процессора нет, пытаемся
-				// попробовать следующий.
-				++_current_index;
-		}
+			const DWORD_PTR bit = DWORD_PTR{1} << _bit_index_to_check;
+			++_bit_index_to_check;
 
-		if( !found )
-			throw std::runtime_error{ "no more indexes of logical processors" };
+			if( _processors_mask & bit )
+			{
+				_current_index = _bit_index_to_check - 1;
+				break;
+			}
+		}
 	}
 
 	auto
 	current_index() const
 	{
-		if( !_current_index )
+		if( _current_index >= _max_current_index )
 			throw std::runtime_error{ "no more indexes of logical processors" };
 		return _current_index;
 	}
