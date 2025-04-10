@@ -26,9 +26,8 @@ void
 pin_to_core(
 	unsigned core_index)
 {
-#if 0
-	// Этот способ с передачей 0 вместо маски работает под Windows-10.
-	const DWORD_PTR thread_affinity_mask = 0 /* (DWORD_PTR{1} << core_index)*/;
+#if 1
+	const DWORD_PTR thread_affinity_mask = (DWORD_PTR{1} << core_index);
 	
 	// Привязываем себя к конкретному ядру.
 	if( auto old_mask = SetThreadAffinityMask( GetCurrentThread(),
@@ -72,13 +71,14 @@ pin_to_core(
 template< typename T >
 void
 exec_demo_script_thread_body(
-	DWORD_PTR thread_affinity_mask,
+	unsigned core_index,
 	std::latch & start_latch,
 	const script::statement_shptr_t<T> & stm,
 	std::chrono::steady_clock::duration & time_receiver)
 {
 	try
 	{
+		pin_to_core( core_index );
 		start_latch.arrive_and_wait();
 
 		const auto started_at = std::chrono::steady_clock::now();
@@ -151,6 +151,9 @@ do_work(int argc, char ** argv)
 	GetSystemInfo( &sys_info );
 	std::cout << "GetSystemInfo: total logical processors: "
 			<< sys_info.dwNumberOfProcessors << std::endl;
+	std::cout << "GetSystemInfo: dwActiveProcessorMask: "
+			<< std::hex << sys_info.dwActiveProcessorMask << std::dec << std::endl;
+
 	// А что скажут другие способы?
 	std::cout << "GetMaximumProcessorCount(ALL_PROCESSOR_GROUPS): "
 			<< GetMaximumProcessorCount( ALL_PROCESSOR_GROUPS )
@@ -208,9 +211,12 @@ do_work(int argc, char ** argv)
 		// NOTE: если индекс очередного процессора не будет найден,
 		// то вылетит исключение.
 		processor_index_finder.try_find_index();
+		const auto core_index = processor_index_finder.current_index();
+		const DWORD_PTR thread_affinity_mask = (DWORD_PTR{1} << core_index);
 		std::cout << "starting worker #" << (i+1)
 				<< " on processor "
-				<< processor_index_finder.current_index()
+				<< core_index << " (affiniti_mask: "
+				<< std::hex << thread_affinity_mask << std::dec << ")"
 				<< std::endl;
 
 		threads.push_back(
