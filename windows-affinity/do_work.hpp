@@ -10,6 +10,7 @@
 #include <iomanip>
 #include <latch>
 
+#if 0
 inline void
 raise_thread_priority()
 {
@@ -18,12 +19,15 @@ raise_thread_priority()
 			THREAD_PRIORITY_TIME_CRITICAL) )
 		throw std::runtime_error{ "SetThreadPriority failed" };
 }
+#endif
 
 #if 1
 void
 pin_to_core(
 	unsigned core_index)
 {
+#if 0
+	// Этот способ с передачей 0 вместо маски работает под Windows-10.
 	const DWORD_PTR thread_affinity_mask = 0 /* (DWORD_PTR{1} << core_index)*/;
 	
 	// Привязываем себя к конкретному ядру.
@@ -33,6 +37,15 @@ pin_to_core(
 	{
 		throw std::runtime_error{ "SetThreadAffinityMask failed" };
 	}
+#else
+	if( const auto old_processor_id = SetThreadIdealProcessor(
+			GetCurrentThread(),
+			core_index );
+			old_processor_id == static_cast<DWORD>(-1) )
+	{
+		throw std::runtime_error{ "SetThreadIdealProcessor failed" };
+	}
+#endif
 }
 #else
 void
@@ -136,8 +149,20 @@ do_work(int argc, char ** argv)
 	// Определяем сколько всего логических процессоров в системе.
 	SYSTEM_INFO sys_info;
 	GetSystemInfo( &sys_info );
-	std::cout << "total logical processors: "
+	std::cout << "GetSystemInfo: total logical processors: "
 			<< sys_info.dwNumberOfProcessors << std::endl;
+	// А что скажут другие способы?
+	std::cout << "GetMaximumProcessorCount(ALL_PROCESSOR_GROUPS): "
+			<< GetMaximumProcessorCount( ALL_PROCESSOR_GROUPS )
+			<< std::endl;
+	std::cout << "GetMaximumProcessorCount(0): "
+			<< GetMaximumProcessorCount( 0 )
+			<< std::endl;
+	std::cout << "std::thread::hardware_concurrency: "
+			<< std::thread::hardware_concurrency()
+			<< std::endl;
+
+	// Ограничиваем количество нитей.
 	if( threads_count > sys_info.dwNumberOfProcessors )
 		threads_count = sys_info.dwNumberOfProcessors;
 
