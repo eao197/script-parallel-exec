@@ -9,12 +9,13 @@ set(CXX_EXTENSIONS NO)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_executable(doubles-with-templates with-templates/main_doubles.cpp)
-
 add_executable(ints-with-templates with-templates/main_ints.cpp)
 
 add_executable(doubles-no-templates no-templates/main_doubles.cpp)
-
 add_executable(ints-no-templates no-templates/main_ints.cpp)
+
+add_executable(doubles-windows-affinity windows-affinity/main_doubles.cpp)
+add_executable(ints-windows-affinity windows-affinity/main_ints.cpp)
 
 if (WIN32)
 	# Нужна статическая C++ runtime-библиотека.
@@ -22,8 +23,14 @@ if (WIN32)
 		MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 	set_property(TARGET ints-with-templates PROPERTY
 		MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 	set_property(TARGET doubles-no-templates PROPERTY
 		MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 	set_property(TARGET ints-no-templates PROPERTY
+		MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+	set_property(TARGET doubles-windows-affinity PROPERTY
+		MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+	set_property(TARGET ints-windows-affinity PROPERTY
 		MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
