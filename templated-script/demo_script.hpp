@@ -10,14 +10,15 @@ make_demo_script()
 
 	std::vector< script::statement_shptr_t<T> > statements;
 
-
 	statements.push_back(
 			std::make_shared< script::statements::assign_to_t<T> >(
 					var_name, 0));
 	statements.push_back(
 			std::make_shared< script::statements::while_loop_t<T> >(
 					std::make_shared< script::expressions::less_than_t<T> >(
-							var_name, 1'000'000'000),
+							var_name,
+							//FIXME: итоговое значение уменьшено на время отладки.
+							2'000'000 /*1'000'000'000*/),
 					std::make_shared< script::statements::increment_by_t<T> >(
 							var_name, 1)
 			)

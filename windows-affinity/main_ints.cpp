@@ -5,7 +5,7 @@ int main(int argc, char ** argv)
 	try
 	{
 		std::cout << "version for int" << std::endl;
-		do_work<int>(argc, argv);
+		windows_affinity::do_work<int>(argc, argv);
 	}
 	catch(const std::exception & x)
 	{
