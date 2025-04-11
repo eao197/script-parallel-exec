@@ -359,7 +359,23 @@ public:
 	{
 		std::cout << "Usage:\n\t"
 			<< _argv_0
-			<< " [thread_count] [pin[:<core-index(es)>]]"
+			<< " [thread_count] [pin[:<core-index(es)>]]\n\n"
+			<< "where `pin` can be in one of the following formats:\n\n"
+				"pin             pin threads to logical processes sequentially\n"
+				"                starting from 0\n"
+				"pin:N+          pin threads to logical processes sequentially\n"
+				"                starting from N\n"
+				"                For example: pin:3+\n"
+				"pin:I,J,K[,..]  pin thread only to specified logical processes\n"
+				"                For example: pin:0,1,3,4\n"
+				"\n"
+				"NOTE: `thread_count` is optional only if `pin` with enumeration\n"
+				"of logical processors is used. It means that:\n\n"
+			<< "\t" << _argv_0 << " pin:0,2,4\n\n"
+			<< "is OK, but:\n\n"
+			<< "\t" << _argv_0 << " pin:1+\n\n"
+			<< "is an error, it has to be:\n\n"
+			<< "\t" << _argv_0 << " 10 pin:1+"
 			<< std::endl;
 	}
 

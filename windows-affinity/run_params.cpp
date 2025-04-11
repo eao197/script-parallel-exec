@@ -91,6 +91,12 @@ try_parse_cmd_line_args( int argc, char ** argv )
 	constexpr std::string_view pin_prefix{ "pin:" };
 
 	args_parsing_result_t result{ help_requested_t{} };
+	if( 1 == argc )
+	{
+		// Нет смысла продолжать.
+		return result;
+	}
+
 	run_params_t run_params;
 
 	for( int i = 1; i < argc; ++i )
