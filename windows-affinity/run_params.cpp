@@ -4,12 +4,82 @@
 #include <stdexcept>
 #include <string_view>
 #include <string>
+#include <regex>
 
 namespace run_params
 {
 
 namespace
 {
+
+[[nodiscard]]
+pinning_params_t
+try_parse_adv_pinning_mode( std::string arg_value )
+{
+	using sregex_iterator_t = std::sregex_iterator;
+	using smatch_t = std::smatch;
+	const auto regex_kind = std::regex::ECMAScript;
+
+	const auto to_core_index = [](
+			const sregex_iterator_t & it,
+			std::size_t capture_index = 1 )
+	{
+		return static_cast< core_index_t >( std::stoul(
+				smatch_t{ *it }.str( capture_index ) ) );
+	};
+
+	const auto make_it = [](
+			const std::string & from,
+			const std::regex & regex )
+	{
+		return sregex_iterator_t{ from.begin(), from.end(), regex };
+	};
+
+	const sregex_iterator_t not_found{};
+
+	// Сперва самый простой случай: pin:1+.
+	const std::regex simple_start_from{ R"(^(\d+)\+$)", regex_kind };
+
+	if( auto it = make_it( arg_value, simple_start_from );
+			it != not_found )
+	{
+		return seq_pinning_t{ to_core_index( it ) };
+	}
+
+	// Теперь более сложный случай с перечислением конкретных ядер.
+	// Т.е. pin:1 или pin:1, или pin:1,2 или pin:1,2,4,5 и т.д.
+	const std::regex one_selected_core{ R"(^(\d+)$)", regex_kind };
+	const std::regex selected_core_with_comma{ R"(^(\d+),(.*)$)", regex_kind };
+
+	selective_pinning_t selected;
+	while( !arg_value.empty() )
+	{
+		if( auto it_simple = make_it( arg_value, one_selected_core );
+				it_simple != not_found )
+		{
+			selected._cores.push_back( to_core_index( it_simple ) );
+
+			// Продолжать нет мысла.
+			arg_value.clear();
+		}
+		else if( auto it_with_comma =
+				make_it( arg_value, selected_core_with_comma );
+				it_with_comma != not_found )
+		{
+			selected._cores.push_back( to_core_index( it_with_comma ) );
+
+			// Продолжаем с остатком, если таковой есть.
+			arg_value = smatch_t{ *it_with_comma }.str( 2 );
+		}
+		else
+			throw std::runtime_error{
+					"unable to parse enumeration of core indexes, problem "
+					"with substring: `" + arg_value + "`"
+			};
+	}
+
+	return { std::move(selected) };
+}
 
 [[nodiscard]]
 args_parsing_result_t
@@ -25,7 +95,6 @@ try_parse_cmd_line_args( int argc, char ** argv )
 
 	for( int i = 1; i < argc; ++i )
 	{
-		//FIXME: реализовать!
 		const std::string_view current{ argv[ i ] };
 		if( current == "-h"sv || current == "--help"sv )
 		{
@@ -39,7 +108,8 @@ try_parse_cmd_line_args( int argc, char ** argv )
 		}
 		else if( current.starts_with( pin_prefix ) )
 		{
-			//FIXME: реализовать обработку pinning-а.
+			run_params._pinning = try_parse_adv_pinning_mode(
+					std::string{ current.substr( pin_prefix.size() ) } );
 		}
 		else
 		{
