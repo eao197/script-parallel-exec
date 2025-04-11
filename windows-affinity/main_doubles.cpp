@@ -1,5 +1,7 @@
 #include "do_work.hpp"
 
+#include <syncstream>
+
 int main(int argc, char ** argv)
 {
 	try
@@ -9,7 +11,8 @@ int main(int argc, char ** argv)
 	}
 	catch(const std::exception & x)
 	{
-		std::cout << "main: exception caught: " << x.what();
+		std::osyncstream{ std::cerr }
+				<< "main: exception caught: " << x.what();
 	}
 
 	return 0;

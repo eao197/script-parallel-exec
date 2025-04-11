@@ -12,6 +12,7 @@
 #include <format>
 #include <iomanip>
 #include <latch>
+#include <syncstream>
 
 namespace windows_affinity
 {
@@ -62,7 +63,8 @@ exec_demo_script_thread_body(
 	}
 	catch( const std::exception & x)
 	{
-		std::cerr << "exec_demo_script_thread_body: exception caught: "
+		std::osyncstream{ std::cerr }
+				<< "exec_demo_script_thread_body: exception caught: "
 				<< x.what() << std::endl;
 	}
 }
@@ -71,32 +73,34 @@ exec_demo_script_thread_body(
 void
 collect_and_report_some_system_info()
 {
-	std::cout << "some system related information:\n" << std::flush;
+	std::osyncstream cout{ std::cout };
+
+	cout << "some system related information:\n" << std::flush;
 
 	// Определяем сколько всего логических процессоров в системе.
 	SYSTEM_INFO sys_info;
 	GetSystemInfo( &sys_info );
-	std::cout << "  GetSystemInfo: dwNumberOfProcessors: "
+	cout << "  GetSystemInfo: dwNumberOfProcessors: "
 			<< sys_info.dwNumberOfProcessors << std::endl;
-	std::cout << "  GetSystemInfo: dwActiveProcessorMask: "
+	cout << "  GetSystemInfo: dwActiveProcessorMask: "
 			<< std::hex << sys_info.dwActiveProcessorMask << std::dec
 			<< std::endl;
 
-	std::cout << "  ---\n";
+	cout << "  ---\n";
 
-	std::cout << "  std::thread::hardware_concurrency: "
+	cout << "  std::thread::hardware_concurrency: "
 			<< std::thread::hardware_concurrency() << std::endl;
 
-	std::cout << "  ---\n";
+	cout << "  ---\n";
 
-	std::cout << "  GetActiveProcessorCount(ALL_PROCESSOR_GROUPS): "
+	cout << "  GetActiveProcessorCount(ALL_PROCESSOR_GROUPS): "
 			<< GetActiveProcessorCount(ALL_PROCESSOR_GROUPS) << std::endl;
-	std::cout << "  GetActiveProcessorCount(0): "
+	cout << "  GetActiveProcessorCount(0): "
 			<< GetActiveProcessorCount(0) << std::endl;
-	std::cout << "  GetActiveProcessorGroupCount: "
+	cout << "  GetActiveProcessorGroupCount: "
 			<< GetActiveProcessorGroupCount() << std::endl;
 
-	std::cout << "  ---\n";
+	cout << "  ---\n";
 
 	// Что там с affinity для всего процесса?
 	{
@@ -106,7 +110,7 @@ collect_and_report_some_system_info()
 				&system_affinity ) )
 			throw std::runtime_error{ "GetProcessAffinityMask failed" };
 
-		std::cout << "  process affinity: " << std::hex << process_affinity
+		cout << "  process affinity: " << std::hex << process_affinity
 				<< ", system affinity: " << system_affinity << std::dec
 				<< std::endl;
 	}
@@ -230,14 +234,16 @@ class core_index_selector_t
 		[[nodiscard]] std::unique_ptr< abstract_selector_t >
 		operator()( const run_params::no_pinning_t & ) const
 		{
-			std::cout << "no pinning will be used" << std::endl;
+			std::osyncstream{ std::cout }
+					<< "no pinning will be used" << std::endl;
 			return std::make_unique< no_pinning_selector_t >();
 		}
 
 		[[nodiscard]] std::unique_ptr< abstract_selector_t >
 		operator()( const run_params::seq_pinning_t & params ) const
 		{
-			std::cout << "simple sequential pinning will be used "
+			std::osyncstream{ std::cout }
+					<< "simple sequential pinning will be used "
 					"(starting from: " << params._start_from << ")"
 					<< std::endl;
 			return std::make_unique< seq_selector_t >( params );
@@ -246,7 +252,8 @@ class core_index_selector_t
 		[[nodiscard]] std::unique_ptr< abstract_selector_t >
 		operator()( const run_params::selective_pinning_t & params ) const
 		{
-			std::cout << "pinning to selected cores will be used" << std::endl;
+			std::osyncstream{ std::cout }
+					<< "pinning to selected cores will be used" << std::endl;
 			return std::make_unique< selected_selector_t >( params );
 		}
 	};
@@ -279,7 +286,8 @@ do_main_work( const run_params::run_params_t & params )
 
 	// Сколько же нам потребуется нитей?
 	const auto threads_count = detect_threads_count( params );
-	std::cout << "thread(s) to be used: " << threads_count << std::endl;
+	std::osyncstream{ std::cout }
+			<< "thread(s) to be used: " << threads_count << std::endl;
 
 	// Сам демо-скрипт для выполнения.
 	const auto demo_script = make_demo_script<T>();
@@ -312,7 +320,8 @@ do_main_work( const run_params::run_params_t & params )
 		const auto core_index = cores_selector.current_index();
 		if( core_index.has_value() )
 		{
-			std::cout << "starting worker #" << (i+1)
+			std::osyncstream{ std::cout }
+					<< "starting worker #" << (i+1)
 					<< " on logical processor "
 					<< *core_index
 					<< std::endl;
@@ -338,7 +347,8 @@ do_main_work( const run_params::run_params_t & params )
 	{
 		const double as_seconds = std::chrono::duration_cast<
 				std::chrono::milliseconds >(d).count() / 1000.0;
-		std::cout << std::setprecision(4) << as_seconds << std::endl;
+		std::osyncstream{ std::cout }
+				<< std::setprecision(4) << as_seconds << std::endl;
 	}
 }
 
@@ -357,7 +367,7 @@ public:
 	void
 	operator()( const run_params::help_requested_t & ) const
 	{
-		std::cout << "Usage:\n\t"
+		std::osyncstream{ std::cout } << "Usage:\n\t"
 			<< _argv_0
 			<< " [thread_count] [pin[:<core-index(es)>]]\n\n"
 			<< "where `pin` can be in one of the following formats:\n\n"
