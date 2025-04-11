@@ -124,7 +124,12 @@ detect_threads_count( const run_params::run_params_t & params )
 	{
 		// Количество нитей не может превышать количество ядер,
 		// которые были явно указаны для привязки.
-		count = std::min( count, selected_cores->_cores.size() );
+		// Но если thread_count не был указан вообще, то нужно брать
+		// количество перечисленных пользователем ядер.
+		if( params._threads_count.has_value() )
+			count = std::min( count, selected_cores->_cores.size() );
+		else
+			count = selected_cores->_cores.size();
 	}
 
 	if( !count )
