@@ -11,14 +11,104 @@
 #include <chrono>
 #include <format>
 #include <iomanip>
-#include <latch>
 #include <syncstream>
+#include <mutex>
+#include <condition_variable>
 
 namespace windows_affinity
 {
 
 namespace impl
 {
+
+/// Признак того, должна ли рабочая нить выполнять свою работу
+/// в нормальном режиме.
+enum class wakeup_type_t : int
+{
+	/// Рабочая нить должна дождаться сигнала о том, нужно ли ей
+	/// работать или нет. Пока такого сигнала еще нет.
+	standby,
+	/// Рабочая нить должна выполнить свою нормальную работу.
+	normal,
+	/// Рабочая нить должна сразу же завершиться без выполнения
+	/// реальной работы.
+	should_shutdown
+};
+
+/// Тип объекта для синхронизации старта рабочих нитей.
+class startup_sync_t
+{
+	/// Замок объекта.
+	std::mutex _lock;
+
+	/// Условная переменная для ожидания сигнала о начале работы.
+	std::condition_variable _waiting_cv;
+
+	/// Индикатор того, как прошел запуск всех рабочих нитей.
+	///
+	/// Получит значение wakeup_type_t::normal только внутри
+	/// метода wakeup_controller_t::wakeup_threads.
+	wakeup_type_t _wakeup_type{ wakeup_type_t::standby };
+
+public:
+	/// Тип вспомогательного объекта, который в своем деструкторе
+	/// дает рабочим нитям сигнал на пробуждение.
+	///
+	/// Этот сигнал не может быть отдан в деструкторе самого
+	/// startup_sync_t, т.к. рабочие нити должны у себя держать
+	/// валидную ссылку на startup_sync_t. А когда запускается
+	/// деструктор, эта ссылка перестает быть валидной.
+	class wakeup_controller_t
+	{
+		/// Кто реально занимается синхронизацией.
+		startup_sync_t & _parent;
+
+		/// Какой сигнал нужно отправить.
+		///
+		/// По умолчанию отправляем сигнал на аварийное завершение.
+		wakeup_type_t _signal_to_use{ wakeup_type_t::should_shutdown };
+
+	public:
+		wakeup_controller_t( startup_sync_t & parent )
+			: _parent{ parent }
+		{}
+
+		~wakeup_controller_t()
+		{
+			std::lock_guard lock{ _parent._lock };
+			_parent._wakeup_type = _signal_to_use;
+			_parent._waiting_cv.notify_all();
+		}
+
+		/// Индикатор того, что запуск рабочих нитей прошел нормально.
+		///
+		/// Дает команду рабочим нитям проснуться.
+		void
+		wakeup_threads()
+		{
+			std::lock_guard lock{ _parent._lock };
+
+			_parent._wakeup_type = wakeup_type_t::normal;
+			_parent._waiting_cv.notify_all();
+		}
+	};
+
+	startup_sync_t() = default;
+
+	/// Ожидание возможности стартовать.
+	[[nodiscard]] wakeup_type_t
+	arrive_and_wait()
+	{
+		std::unique_lock lock{ _lock };
+
+		if( wakeup_type_t::standby == _wakeup_type )
+			// Слишком рано, нужно подождать.
+			_waiting_cv.wait( lock,
+					[this]{ return wakeup_type_t::standby != _wakeup_type; } );
+
+		return _wakeup_type;
+	}
+};
 
 void
 pin_to_core(
@@ -60,7 +150,8 @@ exec_demo_script_thread_body(
 	/// Куда нужно привязывать нить. Если core_index пуст, то
 	/// привязки нити к ядру не выполняется.
 	std::optional<run_params::thread_pinning_info_t> core_index,
-	std::latch & start_latch,
+	/// Для синхронизации момента старта.
+	startup_sync_t & start_latch,
 	const script::statement_shptr_t<T> & stm,
 	std::chrono::steady_clock::duration & time_receiver)
 {
@@ -69,8 +160,14 @@ exec_demo_script_thread_body(
 		if( core_index.has_value() )
 			pin_to_core( *core_index );
 
-		start_latch.arrive_and_wait();
+		const auto wakeup_type = start_latch.arrive_and_wait();
+		if( wakeup_type_t::should_shutdown == wakeup_type )
+		{
+			// Работать нельзя и нужно быстро завершить свои действия.
+			return;
+		}
 
+		// Раз оказались здесь, значит можно работать в нормальном режиме.
 		const auto started_at = std::chrono::steady_clock::now();
 		script::execute(stm);
 		const auto finished_at = std::chrono::steady_clock::now();
@@ -408,19 +505,25 @@ do_main_work( const run_params::run_params_t & params )
 	// потребоваться привязка рабочих нитей.
 	core_index_selector_t cores_selector{ params._pinning };
 
-	// Поскольку знаем сколько всего будет нитей, то можем сразу создать
-	// барьер для синхронизации старта.
-	std::latch start_latch{ static_cast<ptrdiff_t>(threads_count) };
-
-	// Создаем и запускаем рабочие нити.
-	std::vector< std::jthread > threads;
-	threads.reserve(threads_count);
+	// Очень важно, чтобы данный объект закончил свою жизнь уже
+	// после того, как все рабочие нити будут уничтожены.
+	startup_sync_t start_latch;
 
 	// Приемник итогового времени работы каждой из рабочих нитей.
 	std::vector< std::chrono::steady_clock::duration > times{
 			threads_count,
 			std::chrono::steady_clock::duration::zero()
 	};
+
+	// Создаем и запускаем рабочие нити.
+	std::vector< std::jthread > threads;
+	threads.reserve(threads_count);
+
+	// Очень важно, чтобы этот объект закончил свою жизнь
+	// до того, как threads будет разрушен. Это нужно для того,
+	// чтобы при преждевременном выходе из функции startup_sync_t
+	// дал сигнал на завершение рабочих нитей.
+	startup_sync_t::wakeup_controller_t wakeup_controller{ start_latch };
 
 	// Непосредственный запуск рабочих нитей.
 	for( std::size_t i = 0; i != threads_count;
@@ -450,9 +553,17 @@ do_main_work( const run_params::run_params_t & params )
 		);
 	}
 
+	// Рабочие нити запущены, можно дать им сигнал на начало работы.
+	std::osyncstream{ std::cout }
+			<< "sending `start` signal to worker threads"
+			<< std::endl;
+	wakeup_controller.wakeup_threads();
+
 	// Ждем пока все завершиться.
 	for( auto & thr : threads )
+	{
 		thr.join();
+	}
 
 	// Осталось распечатать результаты.
 	for( const auto & d : times )
