@@ -195,23 +195,120 @@ class core_index_selector_t
 	/// привязывать к следующему ядру.
 	class seq_selector_t final : public abstract_selector_t
 	{
-		//FIXME: только для получения первого работающего варианта.
-		run_params::processor_number_t _processor{};
+		/// Текущая группа процессоров.
+		///
+		/// Исходим из того, что группа с номером 0 всегда существует.
+		WORD _current_group{ 0 };
+
+		/// Общее количество активных групп.
+		const WORD _total_groups;
+
+		/// Общее количество процессоров в текущей группе.
+		WORD _processors_in_current_group;
+
+		/// Текущий процессор в текущей группе.
+		///
+		/// Исходим из того, что процессоры в группе нумеруются с нуля.
+		WORD _current_processor{ 0 };
+
+		[[nodiscard]] static
+		WORD
+		total_groups_count()
+		{
+			const WORD total_groups = GetActiveProcessorGroupCount();
+			if( !total_groups )
+				throw std::runtime_error{
+						std::format(
+								"unable to detect processor group count "
+								"(GetLastError={})",
+								GetLastError() )
+					};
+			return total_groups;
+		}
+
+		[[nodiscard]] static
+		WORD
+		how_many_processors_in_group( WORD group_index )
+		{
+			const WORD processors = static_cast<WORD>(
+					GetActiveProcessorCount( group_index ) );
+			if( !processors )
+				throw std::runtime_error{
+						std::format(
+								"unable to detect processor count for group {} "
+								"(GetLastError={})",
+								group_index,
+								GetLastError() )
+					};
+			return processors;
+		}
 
 	public:
 		seq_selector_t( const run_params::seq_pinning_t & /*params*/ )
-		{}
+			: _total_groups{ total_groups_count() }
+			, _processors_in_current_group{
+					how_many_processors_in_group( _current_group ) }
+		{
+			std::osyncstream{ std::cout }
+					<< "starting from group " << _current_group
+					<< " with " << _processors_in_current_group
+					<< " processor(s)" << std::endl;
+		}
 
 		std::optional< run_params::thread_pinning_info_t >
 		current_index() const override
 		{
-			return { run_params::thread_pinning_info_t{ 0, _processor } };
+			return {
+					run_params::thread_pinning_info_t{
+						_current_group,
+						_current_processor
+					}
+				};
 		}
 
 		void
 		advance() override
 		{
-			++_processor;
+			while( _current_group < _total_groups )
+			{
+				++_current_processor;
+
+				if( _current_processor < _processors_in_current_group )
+				{
+					// Можно брать следующий процессор в текущей группе.
+					return;
+				}
+
+				// В противном случае текущая группа закончилась и нужно
+				// пробовать перейти на следующую.
+				++_current_group;
+				if( _current_group < _total_groups )
+				{
+					_current_processor = 0;
+					_processors_in_current_group = how_many_processors_in_group(
+							_current_group );
+
+					std::osyncstream{ std::cout }
+							<< "switching to the next processor group ("
+							<< _current_group << " of " << _total_groups
+							<< "), processors in this group: "
+							<< _processors_in_current_group << std::endl;
+
+					if( _current_processor < _processors_in_current_group )
+					{
+						// Текущая группа не пуста, так что начинаем ее
+						// использовать с самого первого процессора.
+						return;
+					}
+				}
+			}
+
+			throw std::runtime_error{
+					std::format(
+							"no more processor groups available "
+							"(total groups: {})",
+							_total_groups )
+				};
 		}
 	};
 

@@ -12,7 +12,7 @@ namespace run_params
 using processor_group_id_t = unsigned short;
 
 /// Тип для представления номера логического процессора в группе.
-using processor_number_t = unsigned char;
+using processor_number_t = unsigned short;
 
 /// Информация о привязке одного треда.
 struct thread_pinning_info_t
