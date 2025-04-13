@@ -102,9 +102,11 @@ public:
 		std::unique_lock lock{ _lock };
 
 		if( wakeup_type_t::standby == _wakeup_type )
+		{
 			// Слишком рано, нужно подождать.
 			_waiting_cv.wait( lock,
 					[this]{ return wakeup_type_t::standby != _wakeup_type; } );
+		}
 
 		return _wakeup_type;
 	}
@@ -116,7 +118,8 @@ pin_to_core(
 {
 	PROCESSOR_NUMBER ideal_processor{
 			.Group = static_cast<WORD>(pinning_info._group),
-			.Number = static_cast<BYTE>(pinning_info._processor)
+			.Number = static_cast<BYTE>(pinning_info._processor),
+			.Reserved = 0
 	};
 	//FIXME: действительно ли нужно забирать предыдущий идеальный процессор?
 	//Пока забираем, вдруг это даст какой-то полезной информации для размышлений.
@@ -152,11 +155,15 @@ exec_demo_script_thread_body(
 	std::optional<run_params::thread_pinning_info_t> core_index,
 	/// Для синхронизации момента старта.
 	startup_sync_t & start_latch,
+	/// Что нужно запускать.
 	const script::statement_shptr_t<T> & stm,
+	/// Куда нужно помещать измеренное время выполнения.
 	std::chrono::steady_clock::duration & time_receiver)
 {
 	try
 	{
+		// Сперва привяжемся к указанному ядру, если это нужно,
+		// затем будем ждать сигнала на начало работы.
 		if( core_index.has_value() )
 			pin_to_core( *core_index );
 
@@ -182,7 +189,6 @@ exec_demo_script_thread_body(
 	}
 }
 
-/// Сбор и печать доступной информации о системе.
 void
 collect_and_report_some_system_info()
 {

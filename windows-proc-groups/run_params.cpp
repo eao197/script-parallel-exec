@@ -12,6 +12,13 @@ namespace run_params
 namespace
 {
 
+/// Функция для разбора параметра `pin` с перечислением конкретных ядер
+/// процессора.
+///
+/// @attention
+/// Принимает значение с уже вырезенным префиксом `pin:`. Т.е. если аргумент
+/// командной строки имел вид `pin:0-1,0-2`, то сюда должно прийти только
+/// `0-1,0-2`.
 [[nodiscard]]
 pinning_params_t
 try_parse_adv_pinning_mode( std::string arg_value )
@@ -20,6 +27,8 @@ try_parse_adv_pinning_mode( std::string arg_value )
 	using smatch_t = std::smatch;
 	constexpr auto regex_kind = std::regex::ECMAScript;
 
+	// Чтобы не повторять извлечение числовых значений из результатов
+	// разбора регулярок.
 	const auto to_pinning_info = [](
 			const sregex_iterator_t & it,
 			std::size_t capture_index = 1 )
@@ -33,6 +42,7 @@ try_parse_adv_pinning_mode( std::string arg_value )
 			};
 	};
 
+	// Чтобы не повторять один и тот же код формирования sregex_iterator_t.
 	const auto make_it = [](
 			const std::string & from,
 			const std::regex & regex )
@@ -40,10 +50,11 @@ try_parse_adv_pinning_mode( std::string arg_value )
 		return sregex_iterator_t{ from.begin(), from.end(), regex };
 	};
 
+	// Маркер того, что регулярка в исходной строке не найдена.
 	const sregex_iterator_t not_found{};
 
-	// Обрабатываем перечисление конкретных ядер. Т.е. `pin:0/1` или `pin:0/1,`
-	// или `pin:0/1,0/2` или `pin:0/1,0/2,0/4,0/5` и т.д.
+	// Обрабатываем перечисление конкретных ядер. Т.е. `pin:0-1` или `pin:0-1,`
+	// или `pin:0-1,0-2` или `pin:0-1,0-2,0-4,0-5` и т.д.
 	const std::regex one_selected_core{ R"(^(\d+)-(\d+)$)", regex_kind };
 	const std::regex selected_core_with_comma{ R"(^(\d+)-(\d+),(.*)$)", regex_kind };
 
@@ -55,7 +66,7 @@ try_parse_adv_pinning_mode( std::string arg_value )
 		{
 			selected._cores.push_back( to_pinning_info( it_simple ) );
 
-			// Продолжать нет мысла.
+			// Продолжать нет смысла.
 			arg_value.clear();
 		}
 		else if( auto it_with_comma =
@@ -110,6 +121,8 @@ try_parse_cmd_line_args( int argc, char ** argv )
 		}
 		else if( current.starts_with( pin_prefix ) )
 		{
+			// Пользователь перечислил ядра, к которым хотелось бы
+			// привязаться.
 			run_params._pinning = try_parse_adv_pinning_mode(
 					std::string{ current.substr( pin_prefix.size() ) } );
 		}
