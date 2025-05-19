@@ -41,6 +41,19 @@ if (WIN32)
 	target_link_libraries(ints-windows-proc-groups PRIVATE
 		windows-proc-groups-run-params)
 
+	add_library(windows-group-affinity-run-params STATIC
+		windows-group-affinity/run_params.hpp
+		windows-group-affinity/run_params.cpp)
+
+	add_executable(doubles-windows-group-affinity
+		windows-group-affinity/main_doubles.cpp)
+	target_link_libraries(doubles-windows-group-affinity PRIVATE
+		windows-group-affinity-run-params)
+
+	add_executable(ints-windows-group-affinity windows-group-affinity/main_ints.cpp)
+	target_link_libraries(ints-windows-group-affinity PRIVATE
+		windows-group-affinity-run-params)
+
 	# Нужна статическая C++ runtime-библиотека.
 	set_property(TARGET doubles-with-templates PROPERTY
 		MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -63,6 +76,11 @@ if (WIN32)
 	set_property(TARGET doubles-windows-proc-groups PROPERTY
 		MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 	set_property(TARGET ints-windows-proc-groups PROPERTY
+		MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+	set_property(TARGET doubles-windows-group-affinity PROPERTY
+		MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+	set_property(TARGET ints-windows-group-affinity PROPERTY
 		MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 

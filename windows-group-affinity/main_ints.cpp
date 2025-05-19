@@ -7,7 +7,7 @@ int main(int argc, char ** argv)
 	try
 	{
 		std::cout << "version for int" << std::endl;
-		windows_proc_groups::do_work<int>(argc, argv);
+		windows_group_affinity::do_work<int>(argc, argv);
 	}
 	catch(const std::exception & x)
 	{

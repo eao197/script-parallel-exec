@@ -15,7 +15,7 @@
 #include <mutex>
 #include <condition_variable>
 
-namespace windows_proc_groups
+namespace windows_group_affinity
 {
 
 namespace impl
@@ -116,22 +116,21 @@ void
 pin_to_core(
 	const run_params::thread_pinning_info_t & pinning_info )
 {
-	PROCESSOR_NUMBER ideal_processor{
-			.Group = static_cast<WORD>(pinning_info._group),
-			.Number = static_cast<BYTE>(pinning_info._processor),
-			.Reserved = 0
-	};
-	//FIXME: действительно ли нужно забирать предыдущий идеальный процессор?
-	//Пока забираем, вдруг это даст какой-то полезной информации для размышлений.
-	PROCESSOR_NUMBER current_ideal_processor;
-	if( !SetThreadIdealProcessorEx(
+	GROUP_AFFINITY new_affinity;
+	std::memset(std::addressof(new_affinity), 0, sizeof(new_affinity));
+	new_affinity.Mask = (KAFFINITY{1} << pinning_info._processor);
+	new_affinity.Group = static_cast<WORD>(pinning_info._group);
+	//FIXME: действительно ли нужно забирать предыдущую информацию?
+	//Пока забираем, вдруг это даст какой-то полезной пищи для размышлений.
+	GROUP_AFFINITY previous_group_affinity;
+	if( !SetThreadGroupAffinity(
 			GetCurrentThread(),
-			std::addressof(ideal_processor),
-			std::addressof(current_ideal_processor) ) )
+			std::addressof(new_affinity),
+			std::addressof(previous_group_affinity) ) )
 	{
 		throw std::runtime_error{
 			std::format(
-					"SetThreadIdealProcessorEx with Group={} and Number={} "
+					"SetThreadGroupAffinity with Group={} and Number={} "
 					"failed (GetLastError={})",
 					pinning_info._group,
 					static_cast<unsigned short>(pinning_info._processor),
@@ -141,8 +140,13 @@ pin_to_core(
 	else
 	{
 		std::osyncstream(std::cout)
-				<< "  old ideal processor was: " << current_ideal_processor.Group
-				<< '-' << static_cast<unsigned short>(current_ideal_processor.Number)
+				<< std::format(
+						"  old group affinity was: group={}, mask={:b}; "
+						"new group affinity is: group={}, mask={:b}; ",
+						previous_group_affinity.Group,
+						previous_group_affinity.Mask,
+						new_affinity.Group,
+						new_affinity.Mask)
 				<< std::endl;
 	}
 }
@@ -637,5 +641,5 @@ do_work(int argc, char ** argv)
 			parsed_args );
 }
 
-} // namespace windows_proc_groups
+} // namespace windows_group_affinity
 
