@@ -216,12 +216,32 @@ collect_and_report_some_system_info()
 
 	cout << "  ---\n";
 
+	cout << "  GetMaximumProcessorCount(ALL_PROCESSOR_GROUPS): "
+			<< GetMaximumProcessorCount(ALL_PROCESSOR_GROUPS) << std::endl;
 	cout << "  GetActiveProcessorCount(ALL_PROCESSOR_GROUPS): "
 			<< GetActiveProcessorCount(ALL_PROCESSOR_GROUPS) << std::endl;
 	cout << "  GetActiveProcessorCount(0): "
 			<< GetActiveProcessorCount(0) << std::endl;
+	cout << std::endl;
+	cout << "  GetMaximumProcessorGroupCount: "
+			<< GetMaximumProcessorGroupCount() << std::endl;
 	cout << "  GetActiveProcessorGroupCount: "
 			<< GetActiveProcessorGroupCount() << std::endl;
+
+	cout << "  === enumeration of all groups ===\n";
+	for(WORD g = 0, g_max = GetMaximumProcessorGroupCount();
+			g != g_max; ++g)
+	{
+		cout << "    #" << g << ": " << GetMaximumProcessorCount(g)
+				<< " processor(s)\n";
+	}
+	cout << "  === enumeration of active groups ===\n";
+	for(WORD g = 0, g_max = GetActiveProcessorGroupCount();
+			g != g_max; ++g)
+	{
+		cout << "    #" << g << ": " << GetActiveProcessorCount(g)
+				<< " processor(s)\n";
+	}
 
 	cout << "  ---\n";
 
