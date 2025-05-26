@@ -3,6 +3,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <syncstream>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -168,7 +169,8 @@ public:
 	exec(exec_context_t<T> & ctx) const override
 	{
 		const auto & v = ctx.get_mutable_ref(_var_name);
-		std::cout << _var_name << "=" << v << std::endl;
+		std::osyncstream{ std::cout }
+				<< _var_name << "=" << v << std::endl;
 	}
 };
 
